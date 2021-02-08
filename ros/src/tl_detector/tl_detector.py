@@ -41,13 +41,18 @@ class TLDetector(object):
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
+        self.is_simulation = not self.config["is_site"]
+        self.light_classifier = TLClassifier(self.is_simulation)
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
+
+       
+        self.has_image = False
+        
 
         rospy.spin()
 
@@ -101,7 +106,10 @@ class TLDetector(object):
 
         """
         #TODO implement
-        return 0
+        closest_idx = self.waypoint_tree.query([pose.position.x, pose.position.y], 1)[1]
+        
+        return closest_idx
+       
 
     def get_light_state(self, light):
         """Determines the current color of the traffic light
@@ -133,17 +141,30 @@ class TLDetector(object):
         """
         light = None
 
+        line_index = None
+        
         # List of positions that correspond to the line to stop in front of for a given intersection
         stop_line_positions = self.config['stop_line_positions']
         if(self.pose):
             car_position = self.get_closest_waypoint(self.pose.pose)
-
+            diff = len(self.waypoints.waypoints)
         #TODO find the closest visible traffic light (if one exists)
+            for i, light_i in enumerate(self.lights):
+                line = stop_line_positions[i]
+                temp = self.get_closest_waypoint(line.pose.pose)
+                d=temp-car_position
+                if d>=0 and d<diff:
+                    diff=d
+                    light=light_i
+                    line_index=temp
+
+
+
 
         if light:
             state = self.get_light_state(light)
-            return light_wp, state
-        self.waypoints = None
+            return line_index, state
+        
         return -1, TrafficLight.UNKNOWN
 
 if __name__ == '__main__':
